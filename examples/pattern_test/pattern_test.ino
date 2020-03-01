@@ -30,7 +30,7 @@ Ticker display_ticker;
 #endif
 // Pins for LED MATRIX
 
-PxMATRIX display(32,16,P_LAT, P_OE,P_A,P_B,P_C);
+PxMATRIX display(64,64,P_LAT, P_OE,P_A,P_B,P_C);
 //PxMATRIX display(64,32,P_LAT, P_OE,P_A,P_B,P_C,P_D);
 //PxMATRIX display(64,64,P_LAT, P_OE,P_A,P_B,P_C,P_D,P_E);
 
@@ -38,8 +38,8 @@ PxMATRIX display(32,16,P_LAT, P_OE,P_A,P_B,P_C);
 // ISR for display refresh
 void display_updater()
 {
-  display.displayTestPattern(70);
-  // display.displayTestPixel(70);
+  display.displayTestPattern(100);
+  //display.displayTestPixel(70);
   //display.display(70);
 }
 #endif

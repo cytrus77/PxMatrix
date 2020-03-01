@@ -444,6 +444,7 @@ inline void PxMATRIX::writeRegister(uint16_t reg_value, uint8_t reg_position)
     // b13  - 6   =1 screen off
     pinMode(_SPI_CLK,OUTPUT);
     pinMode(_SPI_MOSI,OUTPUT);
+    pinMode(D3,OUTPUT); // Citrus
     digitalWrite(_SPI_CLK,HIGH); // CCK LOW
     digitalWrite(_OE_PIN,LOW);
     digitalWrite(_LATCH_PIN,HIGH);
@@ -630,17 +631,53 @@ inline void PxMATRIX::fillMatrixBuffer(int16_t x, int16_t y, uint8_t r, uint8_t 
 {
   if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height))
     return;
-  if (_rotate){
-    uint16_t temp_x=x;
-    x=y;
-    y=_height-1-temp_x;
-  }
 
+  // block 1
+  if (x >= 32 && x < 48 && y >= 16 && y < 32)
+  {
+	  x-=32;
+	  y-=16;
+  }
+  // block 2
+  else if (x >= 0 && x < 16 && y >= 16 && y < 32)
+  {
+  }
+  // block 3
+  else if (x >= 32 && x < 48 && y >= 0 && y < 16)
+  {
+	  x-=16;
+  }
+  // block 4
+  else if (x >= 0 && x < 16 && y >= 0 && y < 16)
+  {
+	  x+=16;
+	  y+=16;
+  }
+  // block 5
+  else if (x >= 48 && x < 64 && y >= 16 && y < 32)
+  {
+	  x-=16;
+	  y-=16;
+  }
+  // block 6
+  else if (x >= 16 && x < 32 && y >= 16 && y < 32)
+  {
+	  x+=16;
+  }
+  // block 7
+  else if (x >= 48 && x < 64 && y >= 0 && y < 16)
+  {
+  }
+  // block 8
+  else if (x >= 16 && x < 32 && y >= 0 && y < 16)
+  {
+	  x+=32;
+	  y+=16;
+  }
 
   if (!_flip)
     x =_width - 1 -x;
 
-  
   if (_color_order!= RRGGBB)
   {
     uint8_t r_temp=r;
@@ -664,68 +701,7 @@ inline void PxMATRIX::fillMatrixBuffer(int16_t x, int16_t y, uint8_t r, uint8_t 
   uint32_t total_offset_g=0;
   uint32_t total_offset_b=0;
 
-  if (_scan_pattern==WZAGZIG || _scan_pattern==VZAG)
-  {
-    // get block coordinates and constraints
-    uint8_t rows_per_buffer = _height/2;
-    uint8_t rows_per_block = rows_per_buffer/2;
-    // this is a defining characteristic of WZAGZIG and VZAG:
-    // two byte alternating chunks bottom up for WZAGZIG
-    // two byte up down down up for VZAG
-    uint8_t cols_per_block = 16;
-    uint8_t panel_width = _width/_panels_width;
-    uint8_t blocks_x_per_panel = panel_width/cols_per_block;
-    uint8_t panel_index = x/panel_width;
-    // strip down to single panel coordinates, restored later using panel_index
-    x = x%panel_width;
-    uint8_t base_y_offset = y/rows_per_buffer;
-    uint8_t buffer_y = y%rows_per_buffer;
-    uint8_t block_x = x/cols_per_block;
-    uint8_t block_x_mod = x%cols_per_block;
-    uint8_t block_y = buffer_y/rows_per_block; // can only be 0/1 for height/pattern=4
-    uint8_t block_y_mod = buffer_y%rows_per_block;
 
-    // translate block address to new block address
-    // invert block_y so remaining translation will be more sane
-    uint8_t block_y_inv = 1 - block_y;
-    uint8_t block_x_inv = blocks_x_per_panel - block_x - 1;
-    uint8_t block_linear_index;
-    if (_scan_pattern==WZAGZIG)
-    {
-      // apply x/y block transform for WZAGZIG, only works for height/pattern=4
-      block_linear_index = block_x_inv * 2 + block_y_inv;
-    }
-    else if (_scan_pattern==VZAG)
-    {
-      // apply x/y block transform for VZAG, only works for height/pattern=4 and 32x32 panels until a larger example is found
-      block_linear_index = block_x_inv * 3 * block_y + block_y_inv  * (block_x_inv + 1);
-    }
-    // render block linear index back into normal coordinates
-    uint8_t new_block_x = block_linear_index % blocks_x_per_panel;
-    uint8_t new_block_y = 1 - block_linear_index/blocks_x_per_panel;
-    x = new_block_x * cols_per_block + block_x_mod + panel_index * panel_width;
-    y = new_block_y * rows_per_block + block_y_mod + base_y_offset * rows_per_buffer;
-  }
-
-  // This code sections computes the byte in the buffer that will be manipulated.
-  if (_scan_pattern!=LINE && _scan_pattern!=WZAGZIG && _scan_pattern!=VZAG)
-  {
-    // Precomputed row offset values
-    base_offset=_row_offset[y]-(x/8)*2;
-    uint8_t row_sector=0;
-    uint16_t row_sector__offset=_width/4;
-    for (uint8_t yy = 0; yy<_height; yy+=2*_row_pattern)
-    {
-      if ((yy<=y) && (y<yy+_row_pattern))
-        total_offset_r=base_offset-row_sector__offset*row_sector;
-      if ((yy+_row_pattern<=y) && (y<yy+2*_row_pattern))
-        total_offset_r=base_offset-row_sector__offset*row_sector;
-
-      row_sector++;
-    }
-  }
-  else
-  {
     // can only be non-zero when _height/(2 inputs per panel)/_row_pattern > 1
     // i.e.: 32x32 panel with 1/8 scan (A/B/C lines) -> 32/2/8 = 2
     uint8_t vert_index_in_buffer = (y%_rows_per_buffer)/_row_pattern; // which set of rows per buffer
@@ -737,41 +713,10 @@ inline void PxMATRIX::fillMatrixBuffer(int16_t x, int16_t y, uint8_t r, uint8_t 
     uint8_t in_row_byte_offset = x_byte%_panel_width_bytes;
     // this could be pretty easily extended to vertical stacking as well
     total_offset_r = _row_offset[y] - in_row_byte_offset - _panel_width_bytes*(_row_sets_per_buffer*(_panels_width*which_buffer + which_panel) + vert_index_in_buffer);
-  }
+
 
   uint8_t bit_select = x%8;
   //Some panels have a byte wise row-changing scanning pattern and/or a bit changing pattern that will be taken care of here.
-  if ((y%(_row_pattern*2))<_row_pattern)
-  {
-    // Variant of ZIGZAG pattern with bit oder reversed on lower part (starts on upper part)
-    if (_scan_pattern==ZAGGIZ)
-    {
-        total_offset_r--;
-        bit_select = 7-bit_select;
-    }
-
-    if (_scan_pattern==ZAGZIG)
-      total_offset_r--;
-
-    // Byte split pattern (lower part)
-    if (_scan_pattern==ZZAGG)
-        if (bit_select>3) total_offset_r--;
-  }
-  else
-  {
-    if (_scan_pattern==ZIGZAG) total_offset_r--;
-
-    // Byte split pattern (upper part)
-    if (_scan_pattern==ZZAGG)
-    {
-      if (bit_select<=3) bit_select += 4;
-      else
-      {
-        bit_select -=4;
-        total_offset_r--;
-      }
-    }
-  }
 
   total_offset_g=total_offset_r-_pattern_color_bytes;
   total_offset_b=total_offset_g-_pattern_color_bytes;
@@ -1065,6 +1010,7 @@ uint8_t (*bufferp)[PxMATRIX_COLOR_DEPTH][buffer_size] = &PxMATRIX_buffer;
         digitalWrite(_LATCH_PIN,LOW);
         delayMicroseconds(1);
 
+        // sending color data
         SPI_TRANSFER(&(*bufferp)[_display_color][i*_send_buffer_size],_send_buffer_size);
 
         while ((micros()-start_time)<show_time)
@@ -1074,16 +1020,7 @@ uint8_t (*bufferp)[PxMATRIX_COLOR_DEPTH][buffer_size] = &PxMATRIX_buffer;
       else
       {
         set_mux(i);
-#ifdef __AVR__
-  uint8_t this_byte;
-  for (uint32_t byte_cnt=0; byte_cnt<_send_buffer_size;byte_cnt++)
-  {
-    this_byte=(*bufferp)[_display_color][i*_send_buffer_size+byte_cnt];
-    SPI_BYTE(this_byte);
-  }
-#else
-  SPI_TRANSFER(&(*bufferp)[_display_color][i*_send_buffer_size],_send_buffer_size);
-#endif
+        SPI_TRANSFER(&(*bufferp)[_display_color][i*_send_buffer_size],_send_buffer_size);
         latch(show_time*((uint16_t)_brightness)/255);
       }
     }
